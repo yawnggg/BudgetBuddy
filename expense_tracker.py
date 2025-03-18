@@ -2,7 +2,7 @@ from expense import Expense
 import datetime
 import calendar
 import pandas as pd
-import os
+import re
 
 def main():
     print(f"Running Expense Tracker!")
@@ -24,7 +24,16 @@ def main():
 def get_user_expense():
     print(f"Getting User Expense...")
     expense_name = input("Enter expense name: ")
-    expense_amount = float(input("Enter expense amount: "))
+
+    while True:
+        user_input = input("Enter expense amount: ")
+
+        if re.match(r'^\d+(\.\d{1,2})?$', user_input):
+            expense_amount = float(user_input)
+            break
+        else:
+            print("Invalid amount. Please enter a number with up to two decimal places (e.g., 12.34).")
+
     expense_categories = [
         "Food 🍔", 
         "Home 🏠", 
@@ -38,16 +47,18 @@ def get_user_expense():
         for i, category_name in enumerate(expense_categories):
             print(f"  {i + 1}. {category_name}")
 
-        selected_index = int(input(f"Enter a category number [1 - {len(expense_categories)}]: ")) - 1
-
-        if 0 <= selected_index < len(expense_categories):
-            selected_category = expense_categories[selected_index]
-            new_expense = Expense(
-                name=expense_name, category=selected_category, amount=expense_amount
-            )
-            return new_expense
-        else: 
-            print("Invalid category. Please try again!")
+        try:
+            selected_index = int(input(f"Enter a category number [1 - {len(expense_categories)}]: ")) - 1
+            if 0 <= selected_index < len(expense_categories):
+                selected_category = expense_categories[selected_index]
+                new_expense = Expense(
+                    name=expense_name, category=selected_category, amount=expense_amount
+                )
+                return new_expense
+            else: 
+                print("Invalid category. Please try again!")
+        except ValueError:
+            print("Invalid input. Please enter a valid category value.")
     
 
 def save_expense_to_file(expense: Expense, expense_file_path):
@@ -57,22 +68,16 @@ def save_expense_to_file(expense: Expense, expense_file_path):
     
     try:
         df = pd.read_csv(expense_file_path)
-
         if list(df.columns) != columns:
             print("CSV file is missing headers. Fixing file format...")
             df = pd.DataFrame(columns=columns)
             df.to_csv(expense_file_path, index=False)
-            
-    except FileNotFoundError:
-        df = pd.DataFrame(columns = columns)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        df = pd.DataFrame(columns=columns)
+        df.to_csv(expense_file_path, index=False)
 
     new_data = pd.DataFrame([[expense.name, expense.amount, expense.category]], columns=df.columns)
-
-    if df.empty:
-        df = new_data
-    else:
-        df = pd.concat([df, new_data], ignore_index=True)
-
+    df = pd.concat([df, new_data], ignore_index=True)
     df.to_csv(expense_file_path, index=False)
 
 
@@ -82,7 +87,7 @@ def summarize_expenses(expense_file_path, budget):
     try:
         df = pd.read_csv(expense_file_path)
     except FileNotFoundError:
-        print("No expenses recorded yey.")
+        print("No expenses recorded yet.")
         return {}
     
     # Grouping expense by category
@@ -112,8 +117,12 @@ def print_summary(summary):
 
     print("Expenses by Category: ")
 
-    for category, amount in summary["expenses_by_category"].items():
-        print(f"  {category}: ${amount:.2f}")
+    # for category, amount in summary["expenses_by_category"].items():
+    #     print(f"  {category}: ${amount:.2f}")
+
+    # New method for printing categories with amounts (instead of using a for loop)
+    df_summary = pd.DataFrame(list(summary["expenses_by_category"].items()), columns=["Category", "Amount ($)"])
+    print(df_summary.to_string(index=False))
 
     print(f"\nTotal Spent: ${summary['total_spent']:.2f}")
     print(f"Budget Remaining: ${summary['remaining_budget']:.2f}")
